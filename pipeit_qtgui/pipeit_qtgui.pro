@@ -1,8 +1,5 @@
-#-------------------------------------------------
-#
-# Project created by QtCreator 2011-11-25T00:18:02
-#
-#-------------------------------------------------
+# Copyright 2011 Ari Hyttinen
+# Distributed under GNU General Public License version 3 or later
 
 QT       += core gui
 
