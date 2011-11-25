@@ -1,7 +1,7 @@
 # Copyright 2011 Ari Hyttinen
 # Distributed under GNU General Public License version 3 or later
 
-QT       += core gui
+QT       += core gui network
 
 TARGET = pipeit_qtgui
 TEMPLATE = app
