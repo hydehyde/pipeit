@@ -8,6 +8,10 @@ TEMPLATE = app
 
 
 SOURCES += main.cpp\
-        mainwindow.cpp
+        mainwindow.cpp \
+    connectiondata.cpp
 
-HEADERS  += mainwindow.h
+HEADERS  += mainwindow.h \
+    connectiondata.h
+
+

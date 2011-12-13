@@ -7,19 +7,17 @@
 #include <QMainWindow>
 #include <QMap>
 #include <QString>
+#include <QSharedPointer>
+
+#include "connectiondata.h"
 
 class QLocalServer;
 class QLocalSocket;
-
-class QTextBrowser;
+class QTabWidget;
 
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
-
-    struct ClientStruct {
-        QString id;
-    };
 
 public:
     MainWindow(QWidget *parent = 0);
@@ -27,16 +25,15 @@ public:
 
 private slots:
     void handleConnection();
-    void clientConnected();
     void clientReadyRead();
     void clientDisconnected();
     void clientError();
 
 private:
     QLocalServer *server;
-    QTextBrowser *view;
+    QTabWidget *tabWidget;
 
-    QMap<QLocalSocket*, ClientStruct> clients;
+    QMap<QLocalSocket*, ConnectionData> clients;
 };
 
 #endif // MAINWINDOW_H

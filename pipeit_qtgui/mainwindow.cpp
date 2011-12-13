@@ -8,11 +8,14 @@
 #include <QLocalServer>
 #include <QLocalSocket>
 
+
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , server(new QLocalServer(this))
-    , view(0)
+    , tabWidget(new QTabWidget)
 {
+    setCentralWidget(tabWidget);
+
     QString sockName("pipeit_gui_server");
 
     // to do: add this as button in the error message mode
@@ -27,13 +30,11 @@ MainWindow::MainWindow(QWidget *parent)
                         .arg(sockName).arg(server->errorString())));
         QPushButton *b = new QPushButton(tr("Quit"));
         w->layout()->addWidget(b);
+
         connect(b, SIGNAL(clicked()), qApp, SLOT(quit()));
-        setCentralWidget(w);
+        tabWidget->addTab(w, tr("*ERROR*"));
     }
     else {
-        view = new QTextBrowser();
-        setCentralWidget(view);
-
         connect(server, SIGNAL(newConnection()), SLOT(handleConnection()));
     }
 }
@@ -49,39 +50,45 @@ void MainWindow::handleConnection()
         QLocalSocket *client = server->nextPendingConnection();
         if (!client) break;
         connect(client, SIGNAL(readyRead()), SLOT(clientReadyRead()));
-        connect(client, SIGNAL(connected()), SLOT(clientConnected()));
         connect(client, SIGNAL(disconnected()), SLOT(clientDisconnected()));
         connect(client, SIGNAL(error(QLocalSocket::LocalSocketError)), SLOT(clientError()));
-    }
-}
 
-void MainWindow::clientConnected()
-{
-    QLocalSocket *client = qobject_cast<QLocalSocket *>(sender());
-    if (!client) return;
-    qDebug() << "A client connected";
-    ClientStruct clientData;
-    clients[client] = clientData;
+        qDebug() << "A client connected";
+        ConnectionData clientData;
+        tabWidget->addTab(clientData.view.data(), tr("*NEW*"));
+        clients[client] = clientData;
+    }
 }
 
 void MainWindow::clientReadyRead()
 {
     QLocalSocket *client = qobject_cast<QLocalSocket *>(sender());
     if (!client) return;
-    qDebug() << "Reading data from A client";
+    qDebug() << "got data from a client";
+    Q_ASSERT(clients.contains(client));
+    ConnectionData &clientData = clients[client];
+
     QByteArray data = client->readAll();
-    if (!clients[client].id.endsWith('\n')) {
+    int dataOffset = 0;
+    if (!clientData.hasFullHeader()) {
+        // hello line not fully received yet, add to it
         int ind = data.indexOf('\n');
-        if (ind == -1) ind = data.size();
-        clients[client].id += data.left(ind+1);
-        data = data.mid(ind+1);
-        qDebug() << "client id now" << clients[client].id;
-    }
-    if (!data.isEmpty()) {
-        QList<QByteArray> lines = data.split('\n');
-        foreach(const QByteArray &line, lines) {
-            view->append(QString::fromLatin1(line));
+        if (ind == -1) {
+            // still no full hello line received
+            clientData.addHeaderBytes(data);
+            data.clear();
         }
+        else {
+            // full hello received
+            dataOffset = ind+1;
+            clientData.addHeaderBytes(data.left(dataOffset));
+            qDebug() << "...got client id" << clientData.idText();
+        }
+        clientData.updateParentTab(tabWidget);
+    }
+    if (data.size() > dataOffset) {
+        // actual data remaining
+        clientData.addBytes(data, dataOffset);
     }
 }
 
@@ -89,8 +96,11 @@ void MainWindow::clientDisconnected()
 {
     QLocalSocket *client = qobject_cast<QLocalSocket *>(sender());
     if (!client) return;
-    qDebug() << "client disconnected" << clients[client].id;
-    view->append(tr("="));
+    Q_ASSERT(clients.contains(client));
+    ConnectionData &clientData = clients[client];
+
+    qDebug() << "client disconnected" << clients[client].idText();
+    clientData.view.data()->append(tr("="));
     clients.remove(client);
 }
 
@@ -98,9 +108,12 @@ void MainWindow::clientError()
 {
     QLocalSocket *client = qobject_cast<QLocalSocket *>(sender());
     if (!client) return;
-    qDebug() << "client" << clients[client].id << "error:" << client->errorString();
+    Q_ASSERT(clients.contains(client));
+    ConnectionData &clientData = clients[client];
+
+    qDebug() << "client" << clientData.idText() << "error:" << client->errorString();
     if (client->error() != QLocalSocket::PeerClosedError) {
-        view->append(tr("Client connection error: %1").arg(client->errorString()));
+        clientData.view.data()->append(tr("Client connection error: %1").arg(client->errorString()));
     }
 }
 
