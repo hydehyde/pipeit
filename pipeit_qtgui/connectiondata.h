@@ -1,34 +1,55 @@
+// Copyright 2011 Ari Hyttinen
+// Distributed under GNU General Public License version 3 or later
+
 #ifndef CONNECTIONDATA_H
 #define CONNECTIONDATA_H
 
-#include <QSharedPointer>
 #include <QWeakPointer>
 #include <QString>
 #include <QByteArray>
 
-#include <QTextCodec>
+class QTextCodec;
+class QTextDecoder;
 
-class QTextBrowser;
+class QPlainTextEdit;
 class QTabWidget;
+class QLocalSocket;
 
-class ConnectionData
+class ConnectionData : public QObject
 {
-public:
-    QByteArray headerBytes;
-    QByteArray bytes;
-    QWeakPointer<QTextBrowser> view;
-    QTextCodec *codec;
-    QSharedPointer<QTextCodec::ConverterState> codecState;
+    Q_OBJECT
 
-    ConnectionData();
+public:
+
+    ConnectionData(QLocalSocket *client, QObject *parent = 0);
+    ~ConnectionData();
+
+    void setView(QPlainTextEdit *newView);
 
     bool hasFullHeader() { return headerBytes.endsWith('\n'); }
 
     QString idText() { return headerBytes; }
 
-    void addHeaderBytes(QByteArray data);
+    int addHeaderBytes(const QByteArray &data);
     void addBytes(QByteArray data, unsigned offset=0);
-    void updateParentTab(QTabWidget *tabWidget);
+
+signals:
+    void headerReceived(const QString &idText);
+
+private slots:
+    void clientReadyRead();
+    void clientDisconnected();
+    void clientError();
+
+private:
+    QLocalSocket *client;
+    QByteArray headerBytes;
+    QByteArray bytes;
+    QString text;
+    QWeakPointer<QPlainTextEdit> view;
+    QByteArray codecName;
+    QTextCodec *codec;
+    QTextDecoder *decoder;
 };
 
 #endif // CONNECTIONDATA_H

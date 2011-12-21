@@ -14,6 +14,8 @@
 class QLocalServer;
 class QLocalSocket;
 class QTabWidget;
+class SessionWidget;
+class ConnectionData;
 
 class MainWindow : public QMainWindow
 {
@@ -25,15 +27,14 @@ public:
 
 private slots:
     void handleConnection();
-    void clientReadyRead();
-    void clientDisconnected();
-    void clientError();
 
 private:
     QLocalServer *server;
     QTabWidget *tabWidget;
 
-    QMap<QLocalSocket*, ConnectionData> clients;
+    QMap<QString, SessionWidget*> sessions;
+    SessionWidget *defaultSession;
+
 };
 
 #endif // MAINWINDOW_H

@@ -40,7 +40,7 @@ bool writeToServer(QLocalSocket &sock, const QByteArray &data)
 int main(int argc, char *argv[])
 {
     if (argc > 1) {
-        fprintf(stderr, "Command line arguments are not supported.");
+        fprintf(stderr, "Command line arguments are not supported yet.");
         return 1;
     }
 
@@ -61,12 +61,12 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    // write identification line to server
-    // id line is words separated by single space, empty words ok, format for version 0:
-    // pipeit rawstream <encoding string> <identification string until newline>
+    // write header line to server
+    // header line is words separated by single space, empty words ok, format for version 0:
+    // pipeit <version> <encoding string> <simple identification string until newline>
     {
-        // empty encoding means "unknown"
-        QByteArray id("pipeit rawstream  pipeit pid ");
+        // empty encoding means unknown/default
+        QByteArray id("pipeit 0  pipe-pid-");
 
         id += QByteArray::number(QCoreApplication::applicationPid());
         id += '\n';
@@ -75,7 +75,8 @@ int main(int argc, char *argv[])
         }
     }
 
-    // read stdin line-by-line and write to server
+    // read stdin and write to server
+    // note: there's no obligation to read or write line-by-line
     forever {
         QByteArray line = stdIn.readLine();
         if (line.isEmpty()) {
@@ -86,5 +87,9 @@ int main(int argc, char *argv[])
             return 1;
         }
     }
+
+    // plan for version 1:
+    // after header line, have data blocks with 2 bytes of length at start,
+    // with special first block: more detailed identification, such as full file name
 
 }

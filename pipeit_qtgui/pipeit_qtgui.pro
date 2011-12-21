@@ -9,9 +9,17 @@ TEMPLATE = app
 
 SOURCES += main.cpp\
         mainwindow.cpp \
-    connectiondata.cpp
+    connectiondata.cpp \
+    sessionwidget.cpp
 
 HEADERS  += mainwindow.h \
-    connectiondata.h
+    connectiondata.h \
+    sessionwidget.h
+
+
+
+
+
+
 
 

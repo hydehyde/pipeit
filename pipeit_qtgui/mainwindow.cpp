@@ -8,11 +8,13 @@
 #include <QLocalServer>
 #include <QLocalSocket>
 
+#include "sessionwidget.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , server(new QLocalServer(this))
     , tabWidget(new QTabWidget)
+    , defaultSession(new SessionWidget)
 {
     setCentralWidget(tabWidget);
 
@@ -35,6 +37,7 @@ MainWindow::MainWindow(QWidget *parent)
         tabWidget->addTab(w, tr("*ERROR*"));
     }
     else {
+        tabWidget->addTab(defaultSession, "DEFAULT");
         connect(server, SIGNAL(newConnection()), SLOT(handleConnection()));
     }
 }
@@ -49,71 +52,11 @@ void MainWindow::handleConnection()
     forever {
         QLocalSocket *client = server->nextPendingConnection();
         if (!client) break;
-        connect(client, SIGNAL(readyRead()), SLOT(clientReadyRead()));
-        connect(client, SIGNAL(disconnected()), SLOT(clientDisconnected()));
-        connect(client, SIGNAL(error(QLocalSocket::LocalSocketError)), SLOT(clientError()));
 
-        qDebug() << "A client connected";
-        ConnectionData clientData;
-        tabWidget->addTab(clientData.view.data(), tr("*NEW*"));
-        clients[client] = clientData;
+        qDebug() << "A new client connected";
+        defaultSession->addClient(client);
     }
 }
 
-void MainWindow::clientReadyRead()
-{
-    QLocalSocket *client = qobject_cast<QLocalSocket *>(sender());
-    if (!client) return;
-    qDebug() << "got data from a client";
-    Q_ASSERT(clients.contains(client));
-    ConnectionData &clientData = clients[client];
 
-    QByteArray data = client->readAll();
-    int dataOffset = 0;
-    if (!clientData.hasFullHeader()) {
-        // hello line not fully received yet, add to it
-        int ind = data.indexOf('\n');
-        if (ind == -1) {
-            // still no full hello line received
-            clientData.addHeaderBytes(data);
-            data.clear();
-        }
-        else {
-            // full hello received
-            dataOffset = ind+1;
-            clientData.addHeaderBytes(data.left(dataOffset));
-            qDebug() << "...got client id" << clientData.idText();
-        }
-        clientData.updateParentTab(tabWidget);
-    }
-    if (data.size() > dataOffset) {
-        // actual data remaining
-        clientData.addBytes(data, dataOffset);
-    }
-}
-
-void MainWindow::clientDisconnected()
-{
-    QLocalSocket *client = qobject_cast<QLocalSocket *>(sender());
-    if (!client) return;
-    Q_ASSERT(clients.contains(client));
-    ConnectionData &clientData = clients[client];
-
-    qDebug() << "client disconnected" << clients[client].idText();
-    clientData.view.data()->append(tr("="));
-    clients.remove(client);
-}
-
-void MainWindow::clientError()
-{
-    QLocalSocket *client = qobject_cast<QLocalSocket *>(sender());
-    if (!client) return;
-    Q_ASSERT(clients.contains(client));
-    ConnectionData &clientData = clients[client];
-
-    qDebug() << "client" << clientData.idText() << "error:" << client->errorString();
-    if (client->error() != QLocalSocket::PeerClosedError) {
-        clientData.view.data()->append(tr("Client connection error: %1").arg(client->errorString()));
-    }
-}
 
