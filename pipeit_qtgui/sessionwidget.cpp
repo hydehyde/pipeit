@@ -7,6 +7,7 @@
 #include <QLocalSocket>
 
 #include <connectiondata.h>
+#include <viewwidget.h>
 
 SessionWidget::SessionWidget(QWidget *parent) :
     QWidget(parent)
@@ -21,22 +22,14 @@ SessionWidget::SessionWidget(QWidget *parent) :
 void SessionWidget::addClient(QLocalSocket *client)
 {
     ConnectionData *cd = new ConnectionData(client, this);
+    ViewWidget *view = new ViewWidget();
 
-    QWidget *w = new QWidget;
-    w->setLayout(new QVBoxLayout);
-
-    labels.append(new QLabel(tr("*NEW*")));
-    w->layout()->addWidget(labels.last());
     connect(cd, SIGNAL(headerReceived(QString)),
-            labels.last(), SLOT(setText(QString)));
+            view->getLabel(), SLOT(setText(QString)));
 
-    views.append(new QPlainTextEdit);
-    views.last()->setReadOnly(true);
-    views.last()->setWordWrapMode(QTextOption::WrapAnywhere);
-    w->layout()->addWidget(views.last());
-    cd->setView(views.last());
+    cd->setViewer(view->getViewer());
 
-    splitter->addWidget(w);
+    splitter->addWidget(view);
 
     connect(cd, SIGNAL(headerReceived(QString)), SLOT(updateConnId(QString)));
 }

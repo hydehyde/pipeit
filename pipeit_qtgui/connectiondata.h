@@ -24,13 +24,13 @@ public:
     ConnectionData(QLocalSocket *client, QObject *parent = 0);
     ~ConnectionData();
 
-    void setView(QPlainTextEdit *newView);
+    void setViewer(QPlainTextEdit *newView);
 
-    bool hasFullHeader() { return headerBytes.endsWith('\n'); }
+    bool hasFullHeader() { return headerState != HDR_INCOMPLETE; }
 
-    QString idText() { return headerBytes; }
+    QString idText();
 
-    int addHeaderBytes(const QByteArray &data);
+    int addHeaderBytes(QByteArray &data);
     void addBytes(QByteArray data, unsigned offset=0);
 
 signals:
@@ -42,11 +42,21 @@ private slots:
     void clientError();
 
 private:
+    bool testInvalidHeaderMagic();
+    bool parseValidHeader();
+
+private:
     QLocalSocket *client;
     QByteArray headerBytes;
+    enum { HDR_INCOMPLETE, HDR_VALID, HDR_IGNORED } headerState;
+    struct {
+        int version;
+        QByteArray encoding;
+        QByteArray simpleId;
+    } parsedHeader;
     QByteArray bytes;
     QString text;
-    QWeakPointer<QPlainTextEdit> view;
+    QWeakPointer<QPlainTextEdit> viewer;
     QByteArray codecName;
     QTextCodec *codec;
     QTextDecoder *decoder;

@@ -11,9 +11,13 @@
 
 #include <QDebug>
 
+static const QByteArray HDR_MAGIC("pipeit ");
+
+
 ConnectionData::ConnectionData(QLocalSocket *client, QObject *parent)
     : QObject(parent)
     , client(client)
+    , headerState(HDR_INCOMPLETE)
     , codecName("UTF-8")
     , codec(QTextCodec::codecForName(codecName))
     , decoder(codec->makeDecoder())
@@ -33,37 +37,67 @@ ConnectionData::~ConnectionData()
 }
 
 
-void ConnectionData::setView(QPlainTextEdit *newView)
+void ConnectionData::setViewer(QPlainTextEdit *newView)
 {
     if (!newView) {
-        view.clear();
+        viewer.clear();
     }
     else {
         newView->setPlainText(text);
-        view = newView;
+        viewer = newView;
+    }
+}
+
+QString ConnectionData::idText()
+{
+    if (hasFullHeader()) {
+        return parsedHeader.simpleId;
+    }
+    else {
+        return tr("*N/A*");
     }
 }
 
 
-int ConnectionData::addHeaderBytes(const QByteArray &data)
+int ConnectionData::addHeaderBytes(QByteArray &data)
 {
-    int dataOffset;
+    if (headerState != HDR_INCOMPLETE) return 0;
+    // add only to incomplete header
 
-    // add to header line
+    int originalHeaderSize = headerBytes.size();
     int ind = data.indexOf('\n');
+
     if (ind == -1) {
         // not complete header line, add all
         headerBytes += data;
-        dataOffset = data.size();
+        if (!testInvalidHeaderMagic()) return data.size();
+        // else header is invalid
     }
     else {
         // got full header line
-        dataOffset = ind+1;
+        int dataOffset = ind+1;
         headerBytes += data.left(dataOffset);
-        qDebug() << "...got client id" << idText();
-        emit headerReceived(idText());
+        qDebug() << "got full header" << headerBytes;
+        if (!testInvalidHeaderMagic() && parseValidHeader()) {
+            headerState = HDR_VALID;
+            emit headerReceived(idText());
+            return dataOffset;
+        }
+        // else header is invalid
     }
-    return dataOffset;
+
+    // if code flow reaches here, it means there were no valid pipeit header
+    qDebug() << "invalid header, assuming it is raw data" << headerBytes;
+    headerState = HDR_IGNORED;
+
+    // restore old header bytes to data
+    data.prepend(headerBytes.left(originalHeaderSize));
+    headerBytes.clear();
+
+    parsedHeader.version = -1;
+    parsedHeader.encoding.clear();
+    parsedHeader.simpleId = "*RAW*";
+    return 0;
 }
 
 
@@ -74,8 +108,8 @@ void ConnectionData::addBytes(QByteArray data, unsigned offset)
     QString decodedText = decoder->toUnicode(data.constData() + offset, data.size() - offset);
     text += decodedText;
 
-    if (!view.isNull()) {
-        QTextCursor tc = view.data()->textCursor();
+    if (!viewer.isNull()) {
+        QTextCursor tc = viewer.data()->textCursor();
         // using text cursor for insertion avoids affecting any user selection
         tc.movePosition(QTextCursor::End);
         tc.insertText(decodedText);
@@ -92,7 +126,7 @@ void ConnectionData::clientReadyRead()
 
     int dataOffset = 0;
     QByteArray data = client->readAll();
-    if (!hasFullHeader()) {
+    if (headerState == HDR_INCOMPLETE) {
         dataOffset = addHeaderBytes(data);
     }
     if (data.size() > dataOffset) {
@@ -110,8 +144,8 @@ void ConnectionData::clientDisconnected()
     client = 0;
 
     qDebug() << "client disconnected>" << idText();
-    if (!view.isNull()) {
-        view.data()->appendHtml(tr("<hr>EOF<hr>"));
+    if (!viewer.isNull()) {
+        viewer.data()->appendHtml(tr("<hr>EOF<hr>"));
     }
 }
 
@@ -123,9 +157,49 @@ void ConnectionData::clientError()
 
     qDebug() << "client>" << idText() << "<error:" << client->errorString();
     if (client->error() != QLocalSocket::PeerClosedError) {
-        if (!view.isNull()) {
-            view.data()->appendHtml(tr("<hr>Client connection error:<br>%1<hr>").arg(client->errorString()));
+        if (!viewer.isNull()) {
+            viewer.data()->appendHtml(tr("<hr>Client connection error:<br>%1<hr>").arg(client->errorString()));
         }
     }
 }
+
+
+bool ConnectionData::testInvalidHeaderMagic() {
+    if (headerBytes.size() < HDR_MAGIC.size()) {
+        return !HDR_MAGIC.startsWith(headerBytes);
+    }
+    else {
+        return !headerBytes.startsWith(HDR_MAGIC);
+    }
+
+}
+
+
+bool ConnectionData::parseValidHeader()
+{
+    int pos;
+    bool ok;
+    int startPos = HDR_MAGIC.size();
+
+
+    // parse integer version
+    pos = headerBytes.indexOf(' ', startPos);
+    if (pos == -1) return false;
+    parsedHeader.version = headerBytes.mid(startPos, pos-startPos).toInt(&ok);
+    if (!ok || parsedHeader.version < 0) return false;
+    startPos = pos + 1;
+
+    // parse encoding name
+    pos = headerBytes.indexOf(' ', startPos);
+    if (pos == -1) return false;
+    parsedHeader.encoding = headerBytes.mid(startPos, pos-startPos);
+    startPos = pos + 1;
+
+    // rest of the line is simplified id, leave out only line feed at end
+    parsedHeader.simpleId = headerBytes.mid(startPos, headerBytes.size() - startPos - 1);
+    startPos = pos + 1;
+
+    return true;
+}
+
 

@@ -14,6 +14,7 @@ class QPlainTextEdit;
 class QLabel;
 
 class ConnectionData;
+class ViewWidget;
 
 class SessionWidget : public QWidget
 {
@@ -29,8 +30,6 @@ private slots:
 
 private:
     QSplitter *splitter;
-    QList<QPlainTextEdit *> views;
-    QList<QLabel *> labels;
 };
 
 #endif // SESSION_H
