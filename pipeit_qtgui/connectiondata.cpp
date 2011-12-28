@@ -11,42 +11,26 @@
 
 #include <QDebug>
 
+#include "common.h"
+
 static const QByteArray HDR_MAGIC("pipeit ");
 
 
-ConnectionData::ConnectionData(QLocalSocket *client, QObject *parent)
+ConnectionData::ConnectionData(QAbstractItemModel *model, const QPersistentModelIndex &modelIndex, QLocalSocket *client, QObject *parent)
     : QObject(parent)
+    , model(model)
+    , modelIndex(modelIndex)
+    , key(modelIndex.data(Qt::UserRole).toInt())
     , client(client)
     , headerState(HDR_INCOMPLETE)
-    , codecName("UTF-8")
-    , codec(QTextCodec::codecForName(codecName))
-    , decoder(codec->makeDecoder())
 {
     if (client) {
         connect(client, SIGNAL(readyRead()), SLOT(clientReadyRead()));
         connect(client, SIGNAL(disconnected()), SLOT(clientDisconnected()));
         connect(client, SIGNAL(error(QLocalSocket::LocalSocketError)), SLOT(clientError()));
     }
-    Q_ASSERT(codec);
 }
 
-
-ConnectionData::~ConnectionData()
-{
-    delete decoder;
-}
-
-
-void ConnectionData::setViewer(QPlainTextEdit *newView)
-{
-    if (!newView) {
-        viewer.clear();
-    }
-    else {
-        newView->setPlainText(text);
-        viewer = newView;
-    }
-}
 
 QString ConnectionData::idText()
 {
@@ -59,13 +43,13 @@ QString ConnectionData::idText()
 }
 
 
-int ConnectionData::addHeaderBytes(QByteArray &data)
+int ConnectionData::extractHeaderBytes(QByteArray &data)
 {
     if (headerState != HDR_INCOMPLETE) return 0;
     // add only to incomplete header
 
-    int originalHeaderSize = headerBytes.size();
-    int ind = data.indexOf('\n');
+    int originalHeaderSize = headerBytes.size(); // needed in case there's no header at all
+    int ind = data.indexOf('\n'); // first \n is end of header
 
     if (ind == -1) {
         // not complete header line, add all
@@ -80,7 +64,9 @@ int ConnectionData::addHeaderBytes(QByteArray &data)
         qDebug() << "got full header" << headerBytes;
         if (!testInvalidHeaderMagic() && parseValidHeader()) {
             headerState = HDR_VALID;
-            emit headerReceived(idText());
+            if (modelIndex.isValid()) {
+                model->setData(modelIndex, idText());
+            }
             return dataOffset;
         }
         // else header is invalid
@@ -96,24 +82,11 @@ int ConnectionData::addHeaderBytes(QByteArray &data)
 
     parsedHeader.version = -1;
     parsedHeader.encoding.clear();
-    parsedHeader.simpleId = "*RAW*";
-    return 0;
-}
-
-
-void ConnectionData::addBytes(QByteArray data, unsigned offset)
-{
-    bytes.append(data.constData() + offset, data.size() - offset);
-
-    QString decodedText = decoder->toUnicode(data.constData() + offset, data.size() - offset);
-    text += decodedText;
-
-    if (!viewer.isNull()) {
-        QTextCursor tc = viewer.data()->textCursor();
-        // using text cursor for insertion avoids affecting any user selection
-        tc.movePosition(QTextCursor::End);
-        tc.insertText(decodedText);
+    parsedHeader.simpleId = "*RAW" + QByteArray::number(key) + '*';
+    if (modelIndex.isValid()) {
+        model->setData(modelIndex, idText());
     }
+    return 0;
 }
 
 
@@ -124,14 +97,15 @@ void ConnectionData::clientReadyRead()
 
     qDebug() << "got data from a client>" << idText();
 
-    int dataOffset = 0;
     QByteArray data = client->readAll();
-    if (headerState == HDR_INCOMPLETE) {
-        dataOffset = addHeaderBytes(data);
-    }
+    int dataOffset = extractHeaderBytes(data);
+
     if (data.size() > dataOffset) {
         // there's actual data remaining
-        addBytes(data, dataOffset);
+        //int originalSize = bytes.size();
+        bytes.append(data.constData() + dataOffset, data.size() - dataOffset);
+        //emit bytesReceived(bytes, originalSize + dataOffset);
+        emit bytesReceived(key, data, dataOffset);
     }
 }
 
@@ -142,11 +116,10 @@ void ConnectionData::clientDisconnected()
     Q_ASSERT(qobject_cast<QLocalSocket *>(sender()) == client);
     client->deleteLater();
     client = 0;
-
     qDebug() << "client disconnected>" << idText();
-    if (!viewer.isNull()) {
-        viewer.data()->appendHtml(tr("<hr>EOF<hr>"));
-    }
+    QString msg(tr("EOF"));
+    eofMessages.append(msg);
+    emit eofReceived(key, msg);
 }
 
 
@@ -157,18 +130,22 @@ void ConnectionData::clientError()
 
     qDebug() << "client>" << idText() << "<error:" << client->errorString();
     if (client->error() != QLocalSocket::PeerClosedError) {
-        if (!viewer.isNull()) {
-            viewer.data()->appendHtml(tr("<hr>Client connection error:<br>%1<hr>").arg(client->errorString()));
-        }
+        QString msg(tr("ERROR: ") + client->errorString());
+        eofMessages.append(msg);
+        emit eofReceived(key, msg);
     }
 }
 
 
 bool ConnectionData::testInvalidHeaderMagic() {
     if (headerBytes.size() < HDR_MAGIC.size()) {
+        // header is still shorter than magic string,
+        // so test if magic string start matches to header so far
         return !HDR_MAGIC.startsWith(headerBytes);
     }
     else {
+        // header is at least as long as magic string
+        // so test if header starts with magic string
         return !headerBytes.startsWith(HDR_MAGIC);
     }
 
@@ -177,10 +154,10 @@ bool ConnectionData::testInvalidHeaderMagic() {
 
 bool ConnectionData::parseValidHeader()
 {
+    // assumes headerBytes starts with the magic string
     int pos;
     bool ok;
     int startPos = HDR_MAGIC.size();
-
 
     // parse integer version
     pos = headerBytes.indexOf(' ', startPos);
@@ -189,17 +166,22 @@ bool ConnectionData::parseValidHeader()
     if (!ok || parsedHeader.version < 0) return false;
     startPos = pos + 1;
 
-    // parse encoding name
-    pos = headerBytes.indexOf(' ', startPos);
-    if (pos == -1) return false;
-    parsedHeader.encoding = headerBytes.mid(startPos, pos-startPos);
-    startPos = pos + 1;
+    switch (parsedHeader.version) {
+    case 0:
+        // parse encoding name
+        pos = headerBytes.indexOf(' ', startPos);
+        if (pos == -1) return false;
+        parsedHeader.encoding = headerBytes.mid(startPos, pos-startPos);
+        startPos = pos + 1;
 
-    // rest of the line is simplified id, leave out only line feed at end
-    parsedHeader.simpleId = headerBytes.mid(startPos, headerBytes.size() - startPos - 1);
-    startPos = pos + 1;
-
-    return true;
+        // rest of the line is simplified id, leave out only line feed at end
+        parsedHeader.simpleId = headerBytes.mid(startPos, headerBytes.size() - startPos - 1);
+        startPos = pos + 1;
+        return true;
+    default:
+        // other versions not implemented yet
+        return false;
+    }
 }
 
 

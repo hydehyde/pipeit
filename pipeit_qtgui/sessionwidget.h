@@ -12,6 +12,8 @@ class QSplitter;
 class QLocalSocket;
 class QPlainTextEdit;
 class QLabel;
+class QStandardItemModel;
+class QModelIndex;
 
 class ConnectionData;
 class ViewWidget;
@@ -19,6 +21,8 @@ class ViewWidget;
 class SessionWidget : public QWidget
 {
     Q_OBJECT
+
+    enum {VIEWCOUNT = 3, LASTCOUNT = 3};
 public:
     explicit SessionWidget(QWidget *parent = 0);
     void addClient(QLocalSocket *client);
@@ -26,10 +30,22 @@ public:
 signals:
 
 private slots:
-    void updateConnId(const QString&);
+    void distributeNewBytes(int key, const QByteArray &bytes, int offset);
+    void distributeEofMessage(int key, const QString &eofMessage);
+
+private slots:
+    void updateNthLastViews(int viewInd=0);
+    int getRealKeyFromConnections(int viewInd);
 
 private:
-    QSplitter *splitter;
+    int connKey;
+    QMap<int, ConnectionData*> connections;
+    QStandardItemModel *connModel;
+    QSplitter *outerSplitter;
+    QSplitter *innerSplitter1;
+    QSplitter *innerSplitter2;
+
+    ViewWidget* views[VIEWCOUNT];
 };
 
 #endif // SESSION_H

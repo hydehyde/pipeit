@@ -7,9 +7,9 @@
 #include <QWeakPointer>
 #include <QString>
 #include <QByteArray>
+#include <QStringList>
 
-class QTextCodec;
-class QTextDecoder;
+#include <QPersistentModelIndex>
 
 class QPlainTextEdit;
 class QTabWidget;
@@ -21,20 +21,19 @@ class ConnectionData : public QObject
 
 public:
 
-    ConnectionData(QLocalSocket *client, QObject *parent = 0);
-    ~ConnectionData();
+    ConnectionData(QAbstractItemModel *model, const QPersistentModelIndex &modelIndex, QLocalSocket *client, QObject *parent = 0);
 
-    void setViewer(QPlainTextEdit *newView);
-
-    bool hasFullHeader() { return headerState != HDR_INCOMPLETE; }
+    bool hasFullHeader() const { return headerState != HDR_INCOMPLETE; }
+    QByteArray getBytes() const { return bytes; }
+    QStringList getEofMessages() const { return eofMessages; }
 
     QString idText();
 
-    int addHeaderBytes(QByteArray &data);
-    void addBytes(QByteArray data, unsigned offset=0);
+    int extractHeaderBytes(QByteArray &data);
 
 signals:
-    void headerReceived(const QString &idText);
+    void bytesReceived(int key, const QByteArray &bytes, int offset);
+    void eofReceived(int key, const QString &eofMessage);
 
 private slots:
     void clientReadyRead();
@@ -46,6 +45,9 @@ private:
     bool parseValidHeader();
 
 private:
+    QAbstractItemModel *model;
+    QPersistentModelIndex modelIndex;
+    int key;
     QLocalSocket *client;
     QByteArray headerBytes;
     enum { HDR_INCOMPLETE, HDR_VALID, HDR_IGNORED } headerState;
@@ -55,11 +57,7 @@ private:
         QByteArray simpleId;
     } parsedHeader;
     QByteArray bytes;
-    QString text;
-    QWeakPointer<QPlainTextEdit> viewer;
-    QByteArray codecName;
-    QTextCodec *codec;
-    QTextDecoder *decoder;
+    QStringList eofMessages;
 };
 
 #endif // CONNECTIONDATA_H
