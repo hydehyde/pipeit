@@ -25,7 +25,7 @@ public:
     void setRealKey(int key) { realKey = key; }
 
 signals:
-    void viewerTargetSelected(int newKey, QWeakPointer<ViewWidget>);
+    void viewerTargetSelected();
 
 public slots:
     void addBytes(const QByteArray &bytes, int offset=0);

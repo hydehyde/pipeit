@@ -75,6 +75,9 @@ void ViewWidget::setBytes(const QByteArray &bytes, const QString &eofMessage, in
 {
     QString decodedText = decoder->toUnicode(bytes.constData() + offset, bytes.size() - offset);
     viewer->clear();
+    QTextCursor tc = viewer->textCursor();
+    tc.setCharFormat(QTextCharFormat());
+    viewer->setTextCursor(tc);
     viewer->setPlainText(decodedText);
     if (!eofMessage.isEmpty()) {
         addEofMessage(eofMessage);
@@ -84,7 +87,7 @@ void ViewWidget::setBytes(const QByteArray &bytes, const QString &eofMessage, in
 
 void ViewWidget::selectionBoxChanged(int index)
 {
-    int key = selectionBox->itemData(index, Qt::UserRole).toInt();
-    emit viewerTargetSelected(key, QWeakPointer<ViewWidget>(this));
+    selectedKey = selectionBox->itemData(index, Qt::UserRole).toInt();
+    emit viewerTargetSelected();
 }
 

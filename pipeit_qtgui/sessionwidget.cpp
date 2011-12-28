@@ -28,15 +28,15 @@ SessionWidget::SessionWidget(QWidget *parent) :
     {
         QStandardItem *item;
 
-        item = new QStandardItem(tr("*Latest*"));
+        item = new QStandardItem(tr("-- Previous"));
         item->setData(-1, Qt::UserRole);
         connModel->appendRow(item);
 
-        item = new QStandardItem(tr("*2nd last*"));
+        item = new QStandardItem(tr("-- 2nd last"));
         item->setData(-2, Qt::UserRole);
         connModel->appendRow(item);
 
-        item = new QStandardItem(tr("*3rd last*"));
+        item = new QStandardItem(tr("-- 3rd last"));
         item->setData(-3, Qt::UserRole);
         connModel->appendRow(item);
 
@@ -56,6 +56,10 @@ SessionWidget::SessionWidget(QWidget *parent) :
             int selectedKey = -(ii+1);
             views[ii]->setSelectedKey( selectedKey );
         }
+        connect(views[ii],
+                SIGNAL(viewerTargetSelected()),
+                SLOT(viewerSelection()));
+
         addSplitter->addWidget(views[ii]);
     }
 }
@@ -109,34 +113,33 @@ void SessionWidget::distributeEofMessage(int key, const QString &eofMessage)
 }
 
 
+void SessionWidget::viewerSelection()
+{
+    // justification for using sender(): this slot method operates directly on sender anyway
+    ViewWidget *view = qobject_cast<ViewWidget*>(sender());
+    if (!view) return;
+
+    updateViewerDataSource(view, view->getSelectedKey());
+}
+
+
 void SessionWidget::updateNthLastViews(int viewInd)
 {
     Q_ASSERT(viewInd >= 0 && viewInd < VIEWCOUNT);
 
-    int connKey;
+    int key;
 
     // first try to find a view which needs to be updated
     forever {
         if ( viewInd >= VIEWCOUNT) return; // no more views to update, return
-        connKey = views[viewInd]->getSelectedKey();
-        if (connKey < 0) break; // found a view that needs updating, break to do it
+        key = views[viewInd]->getSelectedKey();
+        if (key < 0) break; // found a view that needs updating, break to do it
         ++viewInd; // test next view
     }
 
     // then update the found view
-    {
-        int realKey = getRealKeyFromConnections(connKey);
-        if (views[viewInd]->getRealKey() != realKey) {
-            views[viewInd]->setRealKey(realKey);
-            if (realKey > 0) {
-                const ConnectionData *cd = connections[realKey];
-                views[viewInd]->setBytes(cd->getBytes(), cd->getEofMessages().join("\n"));
-            }
-            else {
-                views[viewInd]->setBytes(QByteArray(), tr("NO DATA"));
-            }
-        }
-    }
+    updateViewerDataSource(views[viewInd], key);
+
     // then try to find next view for update, to avoid queuing method call when not needed
     do {
         ++viewInd; // test next view
@@ -175,5 +178,22 @@ int SessionWidget::getRealKeyFromConnections(int selectedKey)
 
     return realKey;
 }
+
+void SessionWidget::updateViewerDataSource(ViewWidget *view, int key)
+{
+    int realKey = getRealKeyFromConnections(key);
+
+    if (view->getRealKey() != realKey) {
+        view->setRealKey(realKey);
+        if (realKey > 0) {
+            const ConnectionData *cd = connections[realKey];
+            view->setBytes(cd->getBytes(), cd->getEofMessages().join("\n"));
+        }
+        else {
+            view->setBytes(QByteArray(), tr("NO DATA"));
+        }
+    }
+}
+
 
 

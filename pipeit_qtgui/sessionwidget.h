@@ -22,7 +22,10 @@ class SessionWidget : public QWidget
 {
     Q_OBJECT
 
-    enum {VIEWCOUNT = 3, LASTCOUNT = 3};
+    enum {
+        VIEWCOUNT = 3, // number of viewer widgets to create
+        LASTCOUNT = 3  // number of "Nth last" selection entries to keep
+    };
 public:
     explicit SessionWidget(QWidget *parent = 0);
     void addClient(QLocalSocket *client);
@@ -32,10 +35,13 @@ signals:
 private slots:
     void distributeNewBytes(int key, const QByteArray &bytes, int offset);
     void distributeEofMessage(int key, const QString &eofMessage);
-
-private slots:
+    void viewerSelection(); // operates on sender()
     void updateNthLastViews(int viewInd=0);
-    int getRealKeyFromConnections(int viewInd);
+
+private: //methods
+    int getRealKeyFromConnections(int selectedKey);
+    void updateViewerDataSource(ViewWidget *view, int key);
+
 
 private:
     int connKey;
