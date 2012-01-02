@@ -11,13 +11,17 @@ SOURCES += main.cpp\
         mainwindow.cpp \
     connectiondata.cpp \
     sessionwidget.cpp \
-    viewwidget.cpp
+    viewwidget.cpp \
+    viewdocument.cpp
 
 HEADERS  += mainwindow.h \
     connectiondata.h \
     sessionwidget.h \
     viewwidget.h \
-    common.h
+    common.h \
+    viewdocument.h
+
+
 
 
 

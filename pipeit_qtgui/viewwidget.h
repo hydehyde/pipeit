@@ -7,11 +7,10 @@ class QLabel;
 class QPlainTextEdit;
 class QComboBox;
 
-class QTextCodec;
-class QTextDecoder;
-
 class QAbstractItemModel;
 class QModelIndex;
+
+class ViewDocument;
 
 class ViewWidget : public QWidget
 {
@@ -23,14 +22,12 @@ public:
     void setSelectedKey(int key);
     int getRealKey() { return realKey; }
     void setRealKey(int key) { realKey = key; }
+    QByteArray getEncoding() { return "UTF-8"; }
+    void setViewDocument(ViewDocument *doc);
 
 signals:
     void viewerTargetSelected();
-
-public slots:
-    void addBytes(const QByteArray &bytes, int offset=0);
-    void addEofMessage(const QString &eofMessage);
-    void setBytes(const QByteArray &bytes, const QString &eofMessage=QString(), int offset=0);
+    void documentNeedsUpdate();
 
 private slots:
     void selectionBoxChanged(int index);
@@ -41,9 +38,6 @@ private:
     QComboBox *selectionBox;
     QPlainTextEdit *viewer;
 
-    QByteArray codecName;
-    QTextCodec *codec;
-    QTextDecoder *decoder;
 };
 
 #endif // VIEWWIDGET_H

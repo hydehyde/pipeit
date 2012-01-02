@@ -1,17 +1,17 @@
 #include "viewwidget.h"
 
 #include <QtGui>
+
+#include "viewdocument.h"
 #include "common.h"
+
 
 ViewWidget::ViewWidget(QAbstractItemModel *model, QWidget *parent) :
     QWidget(parent)
   , selectedKey(0)
-  , realKey(0)
+  , realKey(-1) // value -1 to indicate key has not been set, not even to 0 (invalid)
   , selectionBox(new QComboBox)
   , viewer(new QPlainTextEdit)
-  , codecName("UTF-8")
-  , codec(QTextCodec::codecForName(codecName))
-  , decoder(codec->makeDecoder())
 {
     if (model) {
         selectionBox->setModel(model);
@@ -47,42 +47,17 @@ void ViewWidget::setSelectedKey(int newKey)
 }
 
 
-void ViewWidget::addBytes(const QByteArray &bytes, int offset)
-{
-    QString decodedText = decoder->toUnicode(bytes.constData() + offset, bytes.size() - offset);
 
-    QTextCursor tc = viewer->textCursor();
-    // using text cursor for insertion avoids affecting any user selection
-    tc.movePosition(QTextCursor::End);
-    tc.insertText(decodedText);
+void ViewWidget::setViewDocument(ViewDocument *doc)
+{
+    viewer->setDocument(doc);
+
+    // it seems hide+show is needed to force QPlainTextEdit to react to document change,
+    // update or repaint don't seem to work (tested: Ubuntu 10.04, Qt 4.6.2)
+    viewer->hide();
+    viewer->show();
 }
 
-
-void ViewWidget::addEofMessage(const QString &eofMessage)
-{
-    QTextCharFormat format;
-    format.setForeground(Qt::blue);
-    format.setFontItalic(true);
-
-    QTextCursor tc = viewer->textCursor();
-    // using text cursor for insertion avoids affecting any user selection
-    tc.movePosition(QTextCursor::End);
-    tc.insertText(eofMessage, format);
-}
-
-
-void ViewWidget::setBytes(const QByteArray &bytes, const QString &eofMessage, int offset)
-{
-    QString decodedText = decoder->toUnicode(bytes.constData() + offset, bytes.size() - offset);
-    viewer->clear();
-    QTextCursor tc = viewer->textCursor();
-    tc.setCharFormat(QTextCharFormat());
-    viewer->setTextCursor(tc);
-    viewer->setPlainText(decodedText);
-    if (!eofMessage.isEmpty()) {
-        addEofMessage(eofMessage);
-    }
-}
 
 
 void ViewWidget::selectionBoxChanged(int index)

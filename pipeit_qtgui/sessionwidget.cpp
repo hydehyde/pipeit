@@ -9,17 +9,21 @@
 
 #include <connectiondata.h>
 #include <viewwidget.h>
+#include <viewdocument.h>
 
 #include <common.h>
 
 SessionWidget::SessionWidget(QWidget *parent) :
     QWidget(parent)
   , connKey(0)
+  , noDataDocument(new ViewDocument(QByteArray(), this))
   , connModel(new QStandardItemModel(this))
   , outerSplitter(new QSplitter(Qt::Horizontal))
   , innerSplitter1(new QSplitter(Qt::Vertical))
   , innerSplitter2(new QSplitter(Qt::Vertical))
 {
+    noDataDocument->setBytes(QByteArray(), tr("NO DATA"));
+
     setLayout(new QVBoxLayout);
     layout()->addWidget(outerSplitter);
     outerSplitter->addWidget(innerSplitter1);
@@ -55,6 +59,7 @@ SessionWidget::SessionWidget(QWidget *parent) :
         if (ii < LASTCOUNT) {
             int selectedKey = -(ii+1);
             views[ii]->setSelectedKey( selectedKey );
+            updateViewerDataSource(views[ii], selectedKey);
         }
         connect(views[ii],
                 SIGNAL(viewerTargetSelected()),
@@ -67,6 +72,14 @@ SessionWidget::SessionWidget(QWidget *parent) :
 
 void SessionWidget::addClient(QLocalSocket *client)
 {
+    // do a nice sanity check
+    if(connKey == INT_MAX || connKey < 0) {
+        qCritical("Internal connection id overflow");
+        client->disconnectFromServer();
+        client->deleteLater();
+        return;
+    }
+
     ++connKey;
 
     QStandardItem *item = new QStandardItem(tr("*new%1*").arg(connKey));
@@ -85,30 +98,23 @@ void SessionWidget::addClient(QLocalSocket *client)
     connect(cd,
             SIGNAL(eofReceived(int,QString)),
             SLOT(distributeEofMessage(int,QString)));
-
 }
 
 
 void SessionWidget::distributeNewBytes(int key, const QByteArray &bytes, int offset)
 {
-    // go through views and add received data to all which are showing the connection
-    for(int ii = 0 ; ii < VIEWCOUNT; ++ii) {
-        if (views[ii]->getRealKey() == key) {
-            // real key of this view matches received data
-            views[ii]->addBytes(bytes, offset);
-        }
+    // add bytes to all docs associated with this connection
+    foreach(ViewDocument * const doc, viewDocs.values(key)) {
+        doc->addBytes(bytes, offset);
     }
 }
 
 
 void SessionWidget::distributeEofMessage(int key, const QString &eofMessage)
 {
-    // go through views and add received data to all which are showing the connection
-    for(int ii = 0 ; ii < VIEWCOUNT; ++ii) {
-        if (views[ii]->getRealKey() == key) {
-            // real key of this view matches received data
-            views[ii]->addEofMessage(eofMessage);
-        }
+    // add message to all docs associated with this connection
+    foreach(ViewDocument * const doc, viewDocs.values(key)) {
+        doc->addEofMessage(eofMessage);
     }
 }
 
@@ -179,21 +185,48 @@ int SessionWidget::getRealKeyFromConnections(int selectedKey)
     return realKey;
 }
 
+
 void SessionWidget::updateViewerDataSource(ViewWidget *view, int key)
 {
     int realKey = getRealKeyFromConnections(key);
+    ViewDocument *foundDoc = NULL;
 
+    QByteArray encoding = view->getEncoding();
+    bool changeDoc = false;
     if (view->getRealKey() != realKey) {
+        // real key changed, so document must change always
         view->setRealKey(realKey);
+        changeDoc = true;
+    }
+    else if (realKey > 0) {
+        // real connection, but change in connection: change only if there's encoding change
+        changeDoc = false; // TODO: implement detection of encoding changes
+    }
+    // else no key change, and no real data for the key, do nothing
+
+    if (changeDoc) {
         if (realKey > 0) {
-            const ConnectionData *cd = connections[realKey];
-            view->setBytes(cd->getBytes(), cd->getEofMessages().join("\n"));
+            // find if document for this key and encoding already exists
+            foreach(ViewDocument * const doc, viewDocs.values(realKey)) {
+                if (doc->getEncoding() == encoding) {
+                    foundDoc = doc;
+                    break;
+                }
+            }
+
+            // if no document found, create new
+            if (foundDoc == NULL) {
+                const ConnectionData *cd = connections[realKey];
+                foundDoc = new ViewDocument(encoding, this);
+                foundDoc->setBytes(cd->getBytes(), cd->getEofMessages().join("\n"));
+                viewDocs.insertMulti(realKey, foundDoc);
+            }
         }
         else {
-            view->setBytes(QByteArray(), tr("NO DATA"));
+            // change doc to internally created informative no-data document
+            foundDoc = noDataDocument;
         }
+        Q_ASSERT(foundDoc);
+        view->setViewDocument(foundDoc);
     }
 }
-
-
-

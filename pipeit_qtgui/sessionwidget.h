@@ -7,6 +7,7 @@
 #include <QWidget>
 #include <QWeakPointer>
 #include <QMap>
+#include <QMultiMap>
 
 class QSplitter;
 class QLocalSocket;
@@ -17,6 +18,7 @@ class QModelIndex;
 
 class ConnectionData;
 class ViewWidget;
+class ViewDocument;
 
 class SessionWidget : public QWidget
 {
@@ -46,6 +48,8 @@ private: //methods
 private:
     int connKey;
     QMap<int, ConnectionData*> connections;
+    QMultiMap<int, ViewDocument*> viewDocs;
+    ViewDocument *noDataDocument;
     QStandardItemModel *connModel;
     QSplitter *outerSplitter;
     QSplitter *innerSplitter1;
