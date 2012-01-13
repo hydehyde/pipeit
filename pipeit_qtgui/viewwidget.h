@@ -10,20 +10,24 @@ class QComboBox;
 class QAbstractItemModel;
 class QModelIndex;
 
+
 class ViewDocument;
 
 class ViewWidget : public QWidget
 {
     Q_OBJECT
+
+    static const QByteArray DEFAULT_ENCODING;
+
 public:
     explicit ViewWidget(QAbstractItemModel *model = 0, QWidget *parent = 0);
     QPlainTextEdit *getViewer() { return viewer; }
     int getSelectedKey() { return selectedKey; }
     void setSelectedKey(int key);
     int getRealKey() { return realKey; }
-    void setRealKey(int key) { realKey = key; }
-    QByteArray getEncoding() { return "UTF-8"; }
-    void setViewDocument(ViewDocument *doc);
+    QByteArray getEncoding() { return DEFAULT_ENCODING; }
+    ViewDocument *getViewDocument();
+    void swapViewDocument(ViewDocument *&newDoc, int &newRealKey);
 
 signals:
     void viewerTargetSelected();
@@ -31,6 +35,9 @@ signals:
 
 private slots:
     void selectionBoxChanged(int index);
+
+private: //methods
+    void setDocToViewer(ViewDocument *doc);
 
 private:
     int selectedKey;

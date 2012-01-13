@@ -5,11 +5,13 @@
 #include "viewdocument.h"
 #include "common.h"
 
+// static
+const QByteArray ViewWidget::DEFAULT_ENCODING("UTF-8");
 
 ViewWidget::ViewWidget(QAbstractItemModel *model, QWidget *parent) :
     QWidget(parent)
   , selectedKey(0)
-  , realKey(-1) // value -1 to indicate key has not been set, not even to 0 (invalid)
+  , realKey(0)
   , selectionBox(new QComboBox)
   , viewer(new QPlainTextEdit)
 {
@@ -47,22 +49,53 @@ void ViewWidget::setSelectedKey(int newKey)
 }
 
 
-
-void ViewWidget::setViewDocument(ViewDocument *doc)
+ViewDocument *ViewWidget::getViewDocument()
 {
-    viewer->setDocument(doc);
-
-    // it seems hide+show is needed to force QPlainTextEdit to react to document change,
-    // update or repaint don't seem to work (tested: Ubuntu 10.04, Qt 4.6.2)
-    viewer->hide();
-    viewer->show();
+    return qobject_cast<ViewDocument*>(viewer->document());
 }
 
+
+void ViewWidget::swapViewDocument(ViewDocument *&swapDoc, int &swapRealKey)
+{
+    Q_ASSERT(swapRealKey >= 0);
+    int oldRealKey = getRealKey();
+    ViewDocument *oldDoc = getViewDocument(); // NULL, if current doc isn't a ViewDocument
+    Q_ASSERT(!(oldRealKey > 0 && !oldDoc)); // can't have both valid key and NULL oldDoc
+
+    if (swapDoc == oldDoc) {
+        // no change
+        Q_ASSERT(oldRealKey == swapRealKey); // if docs match, keys should match too
+        oldDoc = NULL, oldRealKey = 0;
+    }
+    else {
+        setDocToViewer(swapDoc);
+        this->realKey = swapRealKey;
+        if (oldDoc && oldDoc->parent() == viewer) {
+            // oldDoc is ownded by viewer, so it will be deleted by viewer
+            Q_ASSERT(oldRealKey <= 0); // if doc is local, real key should be invalid
+            oldDoc = NULL;
+        }
+    }
+    // return old values, which may be 0
+    swapDoc = oldDoc;
+    swapRealKey = oldRealKey;
+}
 
 
 void ViewWidget::selectionBoxChanged(int index)
 {
     selectedKey = selectionBox->itemData(index, Qt::UserRole).toInt();
     emit viewerTargetSelected();
+}
+
+// private
+void ViewWidget::setDocToViewer(ViewDocument *doc)
+{
+    if(!doc) {
+        doc = new ViewDocument(DEFAULT_ENCODING, viewer);
+    }
+    viewer->setDocument(doc);
+    viewer->hide();
+    viewer->show();
 }
 

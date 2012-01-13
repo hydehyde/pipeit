@@ -18,6 +18,8 @@ ViewDocument::ViewDocument(const QByteArray &encoding, QObject *parent) :
 
 void ViewDocument::addBytes(const QByteArray &bytes, int offset)
 {
+    if (bytes.size() <= offset) return;
+
     QString decodedText = decode(bytes, offset);
 
     QTextCursor tc(this);

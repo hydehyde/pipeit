@@ -103,18 +103,32 @@ void SessionWidget::addClient(QLocalSocket *client)
 
 void SessionWidget::distributeNewBytes(int key, const QByteArray &bytes, int offset)
 {
-    // add bytes to all docs associated with this connection
-    foreach(ViewDocument * const doc, viewDocs.values(key)) {
+    // add bytes to all free docs associated with this connection
+    foreach(ViewDocument * const doc, freeViewDocs.values(key)) {
         doc->addBytes(bytes, offset);
+    }
+    // check all views for docs associated with this connection
+    for(int ii = 0 ; ii < VIEWCOUNT ; ++ii) {
+        int realKey = views[ii]->getRealKey();
+        if (realKey == key) {
+            views[ii]->getViewDocument()->addBytes(bytes, offset);
+        }
     }
 }
 
 
 void SessionWidget::distributeEofMessage(int key, const QString &eofMessage)
 {
-    // add message to all docs associated with this connection
-    foreach(ViewDocument * const doc, viewDocs.values(key)) {
+    // add message to all free docs associated with this connection
+    foreach(ViewDocument * const doc, freeViewDocs.values(key)) {
         doc->addEofMessage(eofMessage);
+    }
+    // check all views for docs associated with this connection
+    for(int ii = 0 ; ii < VIEWCOUNT ; ++ii) {
+        int realKey = views[ii]->getRealKey();
+        if (realKey == key) {
+            views[ii]->getViewDocument()->addEofMessage(eofMessage);
+        }
     }
 }
 
@@ -129,8 +143,19 @@ void SessionWidget::viewerSelection()
 }
 
 
-void SessionWidget::updateNthLastViews(int viewInd)
+void SessionWidget::updateNthLastViews(int selectedKey)
 {
+#if 1
+    for(int ii=0; ii<VIEWCOUNT; ++ii) {
+        if(views[ii]->getSelectedKey() == selectedKey) {
+            updateViewerDataSource(views[ii], selectedKey);
+        }
+    }
+    if (-selectedKey < LASTCOUNT) {
+        QMetaObject::invokeMethod(this, "updateNthLastViews", Qt::QueuedConnection, Q_ARG(int, selectedKey-1));
+    }
+#else
+    // recursive method: calls itself with next viewInd, until all are handled
     Q_ASSERT(viewInd >= 0 && viewInd < VIEWCOUNT);
 
     int key;
@@ -154,6 +179,7 @@ void SessionWidget::updateNthLastViews(int viewInd)
 
     // finally queue updating next view
     QMetaObject::invokeMethod(this, "updateNthLastViews", Qt::QueuedConnection, Q_ARG(int, viewInd));
+#endif
 }
 
 
@@ -189,13 +215,12 @@ int SessionWidget::getRealKeyFromConnections(int selectedKey)
 void SessionWidget::updateViewerDataSource(ViewWidget *view, int key)
 {
     int realKey = getRealKeyFromConnections(key);
-    ViewDocument *foundDoc = NULL;
+    ViewDocument *setDoc = NULL;
 
     QByteArray encoding = view->getEncoding();
     bool changeDoc = false;
     if (view->getRealKey() != realKey) {
         // real key changed, so document must change always
-        view->setRealKey(realKey);
         changeDoc = true;
     }
     else if (realKey > 0) {
@@ -207,26 +232,33 @@ void SessionWidget::updateViewerDataSource(ViewWidget *view, int key)
     if (changeDoc) {
         if (realKey > 0) {
             // find if document for this key and encoding already exists
-            foreach(ViewDocument * const doc, viewDocs.values(realKey)) {
+            foreach(ViewDocument * const doc, freeViewDocs.values(realKey)) {
                 if (doc->getEncoding() == encoding) {
-                    foundDoc = doc;
+                    setDoc = doc;
+                    int removedCount = freeViewDocs.remove(realKey, doc);
+                    Q_ASSERT(removedCount == 1); // exactly 1 matching key-value pair should exist
                     break;
                 }
             }
 
             // if no document found, create new
-            if (foundDoc == NULL) {
+            if (setDoc == NULL) {
                 const ConnectionData *cd = connections[realKey];
-                foundDoc = new ViewDocument(encoding, this);
-                foundDoc->setBytes(cd->getBytes(), cd->getEofMessages().join("\n"));
-                viewDocs.insertMulti(realKey, foundDoc);
+                setDoc = new ViewDocument(encoding, this);
+                setDoc->setBytes(cd->getBytes(), cd->getEofMessages().join("\n"));
             }
         }
-        else {
-            // change doc to internally created informative no-data document
-            foundDoc = noDataDocument;
-        }
-        Q_ASSERT(foundDoc);
-        view->setViewDocument(foundDoc);
+        // else no real doc to show
+    }
+
+    if (setDoc == NULL) {
+        Q_ASSERT(realKey == 0);
+        setDoc = noDataDocument;
+    }
+
+    view->swapViewDocument(setDoc, realKey); // swap found/created doc with old doc in viewer
+    if (realKey > 0) {
+        Q_ASSERT(setDoc && setDoc != noDataDocument); // >0 realKey must match with real doc
+        freeViewDocs.insertMulti(realKey, setDoc);
     }
 }

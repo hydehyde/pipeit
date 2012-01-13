@@ -38,7 +38,7 @@ private slots:
     void distributeNewBytes(int key, const QByteArray &bytes, int offset);
     void distributeEofMessage(int key, const QString &eofMessage);
     void viewerSelection(); // operates on sender()
-    void updateNthLastViews(int viewInd=0);
+    void updateNthLastViews(int selectedKey=-1);
 
 private: //methods
     int getRealKeyFromConnections(int selectedKey);
@@ -48,7 +48,7 @@ private: //methods
 private:
     int connKey;
     QMap<int, ConnectionData*> connections;
-    QMultiMap<int, ViewDocument*> viewDocs;
+    QMultiMap<int, ViewDocument*> freeViewDocs;
     ViewDocument *noDataDocument;
     QStandardItemModel *connModel;
     QSplitter *outerSplitter;
