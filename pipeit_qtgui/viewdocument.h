@@ -1,3 +1,10 @@
+// Copyright 2011 Ari Hyttinen
+// Distributed under GNU General Public License version 3 or later
+
+// This QTextDocument subclass is responsible for
+// decoding raw data into unicode text,
+// and it adds slots to receive new raw data and set contents by raw data.
+
 #ifndef VIEWDOCUMENT_H
 #define VIEWDOCUMENT_H
 

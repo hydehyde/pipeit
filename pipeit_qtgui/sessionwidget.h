@@ -1,6 +1,10 @@
 // Copyright 2011 Ari Hyttinen
 // Distributed under GNU General Public License version 3 or later
 
+// This widget class shows a single session,
+// and is responsible for most visible parts of GUI.
+// Session is any number of open or closed connections.
+
 #ifndef SESSIONWIDGET_H
 #define SESSIONWIDGET_H
 

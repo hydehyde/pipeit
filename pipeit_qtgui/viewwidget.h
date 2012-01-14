@@ -1,3 +1,9 @@
+// Copyright 2011 Ari Hyttinen
+// Distributed under GNU General Public License version 3 or later
+
+// This widget class is responsible for showing a single ViewDocument,
+// and GUI controls which allow selecting document, encoding etc for this view.
+
 #ifndef VIEWWIDGET_H
 #define VIEWWIDGET_H
 

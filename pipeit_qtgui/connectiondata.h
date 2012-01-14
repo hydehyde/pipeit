@@ -1,6 +1,10 @@
 // Copyright 2011 Ari Hyttinen
 // Distributed under GNU General Public License version 3 or later
 
+// This data class handles one accepted connection from a data source,
+// recieves the data from the connection,
+// and keeps the raw data after connection is closed
+
 #ifndef CONNECTIONDATA_H
 #define CONNECTIONDATA_H
 

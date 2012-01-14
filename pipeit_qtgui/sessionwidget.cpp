@@ -204,7 +204,6 @@ int SessionWidget::getRealKeyFromConnections(int selectedKey)
 
     // make sure the key exists
     if (!connections.contains(realKey)) {
-        qDebug() << MARK << "called with key" << selectedKey << "... got non-existent key" << realKey;
         realKey = 0;
     }
 

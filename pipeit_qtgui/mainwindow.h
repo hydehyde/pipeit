@@ -1,6 +1,8 @@
 // Copyright 2011 Ari Hyttinen
 // Distributed under GNU General Public License version 3 or later
 
+// This widget class is application main window
+
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
